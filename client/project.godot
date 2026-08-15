@@ -8,9 +8,13 @@ config_version=5
 
 config/name="Dishum"
 config/description="Minimalist real-time multiplayer boxing."
-run/main_scene="res://scenes/Main.tscn"
+run/main_scene="res://scenes/Login.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://icon.svg"
+
+[autoload]
+
+AuthClient="*res://scripts/autoload/AuthClient.gd"
 
 [display]
 

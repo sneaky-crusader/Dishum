@@ -22,6 +22,22 @@ func _build_placeholder_hud() -> void:
 	title.position = Vector2(24, 16)
 	root.add_child(title)
 
+	# Phase 1 identity check: confirms the login flow actually authenticated
+	# the right user. Replaced by a real menu/home screen in a later phase.
+	var identity := Label.new()
+	identity.text = "Logged in as %s" % AuthClient.current_username()
+	identity.position = Vector2(24, 48)
+	root.add_child(identity)
+
+	var logout := Button.new()
+	logout.text = "Log out"
+	logout.position = Vector2(24, 80)
+	logout.pressed.connect(func():
+		AuthClient.sign_out()
+		get_tree().change_scene_to_file("res://scenes/Login.tscn")
+	)
+	root.add_child(logout)
+
 	# LEFT thumb: blocks (HIGH = face, MID = body) — mutually exclusive.
 	root.add_child(_make_button("BLOCK\nHIGH", Vector2(60, 200)))
 	root.add_child(_make_button("BLOCK\nMID", Vector2(60, 380)))

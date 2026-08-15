@@ -7,7 +7,7 @@ estimate changes. Query it any time with the `/progress` skill.
 Checklist convention: `- [x]` done, `- [ ]` not done. Phase % = checked ÷ total
 items in that phase's checklist.
 
-Last updated: **2026-08-15**
+Last updated: **2026-08-15** (bumped again same day)
 
 ---
 
@@ -16,7 +16,7 @@ Last updated: **2026-08-15**
 | Phase | Name | % complete |
 |---|---|---|
 | 0 | Foundations | 83% |
-| 1 | Accounts & directory | 50% |
+| 1 | Accounts & directory | 67% |
 | 2 | Core combat (local) | 0% |
 | 3 | Authoritative multiplayer | 0% |
 | 4 | Matchmaking | 0% |
@@ -36,12 +36,14 @@ Last updated: **2026-08-15**
 - [x] Git-init repo + first commit
 - [ ] Archive/remove legacy Android-only `app/` scaffold (deferred until Godot Android export is verified)
 
-## Phase 1 — Accounts & directory (50%)
+## Phase 1 — Accounts & directory (67%)
 
 - [x] Write Supabase SQL migrations (`profiles`, `matches`, RLS, search index, `apply_match_result()`)
 - [x] Create Supabase project (account + provisioning) — project ref `griglxichqiwdffajwtz`
 - [x] Push migrations to the live project (`supabase db push`) — all 5 applied and verified live
-- [ ] Godot: register/login screens against Supabase Auth
+- [x] Godot: register/login screens against Supabase Auth — `AuthClient.gd` autoload (REST via
+      `HTTPRequest`, no native SDK) + `Login.tscn`/`Register.tscn`; verified end-to-end against
+      the live project (real signup, real confirmation email, real login, session persistence)
 - [ ] Godot: username-search screen with online status
 - [ ] Wire presence (online/offline/in-match)
 
@@ -96,6 +98,9 @@ clients, not writing it from scratch.*
 | 2026-08-15 | Colyseus pinned to `0.17.10` / `@colyseus/schema` `4.0.7` | `^0.16.0` resolved to a broken publish with unresolvable `workspace:` deps; 0.17 is current stable and required an API update (`Room<{state}>` generic, `WebSocketTransport`) |
 | 2026-08-15 | Supabase account creation deferred until migrations were fully written | Stay at $0 spend as long as possible; validate the schema on paper first |
 | 2026-08-15 | Supabase CLI auth via personal access token (not browser login flow) | This shell is non-TTY, so `supabase login`'s browser flow errors (`LegacyLoginMissingTokenError`); user generated a token and exported it themselves to keep it out of the chat transcript where possible |
+| 2026-08-15 | Registration = email + password + username, with mandatory email confirmation before login | User decision; confirmed the live project already enforces this by default (`mailer_autoconfirm: false`) |
+| 2026-08-15 | Auth via plain `HTTPRequest` REST calls to Supabase Auth, not a native GDExtension SDK | Keeps the iOS-compatibility guarantee — zero native plugin dependency, identical code path on Android/iOS/desktop |
+| 2026-08-15 | Client uses the `sb_publishable_...` key only; `sb_secret_...`/`service_role` never touches the client | Publishable key is designed to be public (RLS is the real boundary); secret key is reserved for the Colyseus server in Phase 5 |
 
 ## Misc / ad-hoc task log
 
@@ -111,6 +116,8 @@ clients, not writing it from scratch.*
 | 2026-08-15 | Added `supabase/.temp/` to `.gitignore` | Local CLI cache (project ref, cached version info) created by `supabase link`; not meant to be committed |
 | 2026-08-15 | Moved `SUPABASE_ACCESS_TOKEN` from ad-hoc shell exports into a gitignored root `.env` (+ tracked `.env.example` documenting the var) | User flagged that re-pasting/re-exporting the token every session was pointless busywork once it was already in the chat transcript; `.env` lets the CLI auth without re-asking, while `.env.example` documents the var for anyone else setting up the repo |
 | 2026-08-15 | Linked and pushed to GitHub remote `github.com/sneaky-crusader/Dishum` (`origin/master`) | Repo was empty on GitHub, so pushed all local history with no conflicts; existing Git Credential Manager handled auth |
+| 2026-08-15 | Verified auth error-message translation against real API responses, not assumptions | Duplicate-username-via-trigger returns HTTP 500 with `message` (not `msg`) containing `"unique constraint \"username_unique\""` — confirmed `AuthClient._translate_signup_error` catches it; confirmed the failed transaction leaves zero orphan `auth.users` rows; confirmed unconfirmed-email login returns `{"msg":"Email not confirmed"}`; confirmed re-signup on an unconfirmed email hits a resend rate-limit (429) rather than a hard duplicate error |
+| 2026-08-15 | Ran a full real register → confirm-email → login → fetch-profile cycle against the live project via curl (same calls `AuthClient.gd` makes), then deleted the test account | Proved the whole auth chain works end-to-end, not just "no error thrown"; cleanup confirmed the FK cascade removes the profile too |
 
 ## Timeline notes
 

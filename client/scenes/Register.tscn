@@ -1,0 +1,82 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/Register.gd" id="1"]
+
+[node name="Register" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1")
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="FormPanel" type="VBoxContainer" parent="Center"]
+layout_mode = 2
+custom_minimum_size = Vector2(360, 0)
+
+[node name="Title" type="Label" parent="Center/FormPanel"]
+layout_mode = 2
+horizontal_alignment = 1
+text = "Create account"
+
+[node name="UsernameEdit" type="LineEdit" parent="Center/FormPanel"]
+layout_mode = 2
+placeholder_text = "Username (3-20, letters/numbers/_)"
+
+[node name="EmailEdit" type="LineEdit" parent="Center/FormPanel"]
+layout_mode = 2
+placeholder_text = "Email"
+
+[node name="PasswordEdit" type="LineEdit" parent="Center/FormPanel"]
+layout_mode = 2
+placeholder_text = "Password (min 6 characters)"
+secret = true
+
+[node name="ConfirmPasswordEdit" type="LineEdit" parent="Center/FormPanel"]
+layout_mode = 2
+placeholder_text = "Confirm password"
+secret = true
+
+[node name="ErrorLabel" type="Label" parent="Center/FormPanel"]
+layout_mode = 2
+visible = false
+autowrap_mode = 2
+
+[node name="RegisterButton" type="Button" parent="Center/FormPanel"]
+layout_mode = 2
+text = "Register"
+
+[node name="LoginLink" type="Button" parent="Center/FormPanel"]
+layout_mode = 2
+flat = true
+text = "Already have an account? Log in"
+
+[node name="CheckEmailPanel" type="VBoxContainer" parent="Center"]
+layout_mode = 2
+visible = false
+custom_minimum_size = Vector2(360, 0)
+
+[node name="Title" type="Label" parent="Center/CheckEmailPanel"]
+layout_mode = 2
+horizontal_alignment = 1
+autowrap_mode = 2
+text = "Check your email to confirm your account before logging in."
+
+[node name="ResendButton" type="Button" parent="Center/CheckEmailPanel"]
+layout_mode = 2
+text = "Resend confirmation email"
+
+[node name="StatusLabel" type="Label" parent="Center/CheckEmailPanel"]
+layout_mode = 2
+visible = false
+autowrap_mode = 2
+
+[node name="BackToLoginButton" type="Button" parent="Center/CheckEmailPanel"]
+layout_mode = 2
+flat = true
+text = "Back to Login"
