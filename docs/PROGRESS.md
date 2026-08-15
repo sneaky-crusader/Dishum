@@ -110,6 +110,7 @@ clients, not writing it from scratch.*
 | 2026-08-15 | Verified live schema post-push (not just trusted the "success" message) | Confirmed via `supabase migration list --linked` (all 5 timestamps match local↔remote) and direct SQL queries: `profiles`/`matches` tables exist, RLS is enabled, and `username_unique`/`username_format` constraints are active |
 | 2026-08-15 | Added `supabase/.temp/` to `.gitignore` | Local CLI cache (project ref, cached version info) created by `supabase link`; not meant to be committed |
 | 2026-08-15 | Moved `SUPABASE_ACCESS_TOKEN` from ad-hoc shell exports into a gitignored root `.env` (+ tracked `.env.example` documenting the var) | User flagged that re-pasting/re-exporting the token every session was pointless busywork once it was already in the chat transcript; `.env` lets the CLI auth without re-asking, while `.env.example` documents the var for anyone else setting up the repo |
+| 2026-08-15 | Linked and pushed to GitHub remote `github.com/sneaky-crusader/Dishum` (`origin/master`) | Repo was empty on GitHub, so pushed all local history with no conflicts; existing Git Credential Manager handled auth |
 
 ## Timeline notes
 
