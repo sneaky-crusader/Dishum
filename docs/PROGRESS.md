@@ -16,7 +16,7 @@ Last updated: **2026-08-15**
 | Phase | Name | % complete |
 |---|---|---|
 | 0 | Foundations | 83% |
-| 1 | Accounts & directory | 17% |
+| 1 | Accounts & directory | 50% |
 | 2 | Core combat (local) | 0% |
 | 3 | Authoritative multiplayer | 0% |
 | 4 | Matchmaking | 0% |
@@ -36,11 +36,11 @@ Last updated: **2026-08-15**
 - [x] Git-init repo + first commit
 - [ ] Archive/remove legacy Android-only `app/` scaffold (deferred until Godot Android export is verified)
 
-## Phase 1 — Accounts & directory (17%)
+## Phase 1 — Accounts & directory (50%)
 
 - [x] Write Supabase SQL migrations (`profiles`, `matches`, RLS, search index, `apply_match_result()`)
-- [ ] Create Supabase project (account + provisioning)
-- [ ] Push migrations to the live project (`supabase db push`)
+- [x] Create Supabase project (account + provisioning) — project ref `griglxichqiwdffajwtz`
+- [x] Push migrations to the live project (`supabase db push`) — all 5 applied and verified live
 - [ ] Godot: register/login screens against Supabase Auth
 - [ ] Godot: username-search screen with online status
 - [ ] Wire presence (online/offline/in-match)
@@ -95,6 +95,7 @@ clients, not writing it from scratch.*
 | 2026-08-15 | GL Compatibility renderer for the Godot client | Widest device support across Android + iOS |
 | 2026-08-15 | Colyseus pinned to `0.17.10` / `@colyseus/schema` `4.0.7` | `^0.16.0` resolved to a broken publish with unresolvable `workspace:` deps; 0.17 is current stable and required an API update (`Room<{state}>` generic, `WebSocketTransport`) |
 | 2026-08-15 | Supabase account creation deferred until migrations were fully written | Stay at $0 spend as long as possible; validate the schema on paper first |
+| 2026-08-15 | Supabase CLI auth via personal access token (not browser login flow) | This shell is non-TTY, so `supabase login`'s browser flow errors (`LegacyLoginMissingTokenError`); user generated a token and exported it themselves to keep it out of the chat transcript where possible |
 
 ## Misc / ad-hoc task log
 
@@ -105,6 +106,9 @@ clients, not writing it from scratch.*
 | 2026-08-15 | Diagnosed `npm install` failure (`EUNSUPPORTEDPROTOCOL workspace:`) | Root-caused to a bad `^0.16.0` Colyseus resolution; repinned to `0.17.10`, verified `tsc --noEmit` and a real server boot on `ws://localhost:2567` |
 | 2026-08-15 | Verified Godot project imports headless with no script errors | Confirmed before first commit |
 | 2026-08-15 | Replaced legacy Android-only `.gitignore` with one covering Godot + Node + legacy Android | Needed before first `git init` |
+| 2026-08-15 | Fixed `supabase link` creating a nested `supabase/supabase/` dir | Ran it from inside `supabase/` instead of the repo root, so `supabase/migrations` resolved to a nonexistent nested path and `db push` silently found nothing; removed the bad nesting and re-linked from `D:\Dishum` |
+| 2026-08-15 | Verified live schema post-push (not just trusted the "success" message) | Confirmed via `supabase migration list --linked` (all 5 timestamps match local↔remote) and direct SQL queries: `profiles`/`matches` tables exist, RLS is enabled, and `username_unique`/`username_format` constraints are active |
+| 2026-08-15 | Added `supabase/.temp/` to `.gitignore` | Local CLI cache (project ref, cached version info) created by `supabase link`; not meant to be committed |
 
 ## Timeline notes
 
