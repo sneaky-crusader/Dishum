@@ -10,6 +10,13 @@ const Combat := preload("res://shared/CombatConstants.gd")
 const Fighter := preload("res://scripts/combat/Fighter.gd")
 
 const TICK_SECONDS := 1.0 / Combat.TICK_RATE_HZ
+const FLASH_SECONDS := 0.3  # how long a hit/block flash stays visible, independent of ACTIVE_TICKS
+
+const COLOR_NEUTRAL := Color(0.75, 0.72, 0.65)   # skin tone, nothing happening
+const COLOR_GUARD := Color(0.25, 0.45, 0.9)      # this region is being guarded
+const COLOR_TELEGRAPH := Color(0.95, 0.85, 0.15) # an incoming punch is winding up toward this region
+const COLOR_HIT := Color(0.9, 0.15, 0.15)        # this region was just hit
+const COLOR_BLOCKED := Color(0.2, 0.8, 0.35)     # an incoming punch here was just blocked
 
 var player := Fighter.new()
 var dummy := Fighter.new()
@@ -19,17 +26,17 @@ var _match_over := false
 
 var _player_health_bar: ProgressBar
 var _dummy_health_bar: ProgressBar
-var _player_rect: ColorRect
-var _dummy_rect: ColorRect
 var _status_label: Label
 var _result_panel: Control
 
-const PHASE_COLOR := {
-	0: Color(0.3, 0.3, 0.3),  # NONE
-	1: Color(0.8, 0.8, 0.2),  # WINDUP
-	2: Color(0.9, 0.2, 0.2),  # ACTIVE
-	3: Color(0.4, 0.4, 0.6),  # RECOVERY
-}
+# {region: int, color: Color, time_left: float} or {} when nothing to show.
+var _player_flash := {}
+var _dummy_flash := {}
+
+var _player_head: ColorRect
+var _player_torso: ColorRect
+var _dummy_head: ColorRect
+var _dummy_torso: ColorRect
 
 func _ready() -> void:
 	_build_ui()
@@ -38,29 +45,48 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	if _match_over:
+		_decay_flash(_player_flash, delta)
+		_decay_flash(_dummy_flash, delta)
+		_render_regions()
 		return
 	_tick_accum += delta
 	while _tick_accum >= TICK_SECONDS:
 		_tick_accum -= TICK_SECONDS
 		_advance_tick()
+	_decay_flash(_player_flash, delta)
+	_decay_flash(_dummy_flash, delta)
 	_update_visuals()
 
 func _advance_tick() -> void:
 	tick += 1
 	if player.advance(tick):
-		_resolve(player, dummy, "You")
+		_resolve(player, dummy, "You", _dummy_flash)
 	if dummy.advance(tick):
-		_resolve(dummy, player, "Dummy")
+		_resolve(dummy, player, "Dummy", _player_flash)
 
 	if player.health == 0 or dummy.health == 0:
 		_end_match()
 
-func _resolve(attacker: Fighter, target: Fighter, attacker_label: String) -> void:
+func _resolve(attacker: Fighter, target: Fighter, attacker_label: String, target_flash: Dictionary) -> void:
 	var outcome := attacker.resolve_against(target)
 	if outcome == "hit":
 		_status_label.text = "%s landed a hit!" % attacker_label
+		_set_flash(target_flash, attacker.punch_region, COLOR_HIT)
 	elif outcome == "blocked":
 		_status_label.text = "%s's punch was blocked." % attacker_label
+		_set_flash(target_flash, attacker.punch_region, COLOR_BLOCKED)
+
+func _set_flash(flash: Dictionary, region: int, color: Color) -> void:
+	flash["region"] = region
+	flash["color"] = color
+	flash["time_left"] = FLASH_SECONDS
+
+func _decay_flash(flash: Dictionary, delta: float) -> void:
+	if flash.is_empty():
+		return
+	flash["time_left"] -= delta
+	if flash["time_left"] <= 0.0:
+		flash.clear()
 
 func _end_match() -> void:
 	_match_over = true
@@ -71,8 +97,29 @@ func _end_match() -> void:
 func _update_visuals() -> void:
 	_player_health_bar.value = player.health
 	_dummy_health_bar.value = dummy.health
-	_player_rect.color = PHASE_COLOR[player.punch_phase]
-	_dummy_rect.color = PHASE_COLOR[dummy.punch_phase]
+	_render_regions()
+
+## Each fighter is a head (HIGH region) + torso (MID region). Per region,
+## priority is: an active hit/block flash > a guard color if the fighter is
+## blocking that region > a yellow telegraph if the OPPONENT is winding up a
+## punch aimed at that region (this tells the player which block to press) >
+## neutral.
+func _render_regions() -> void:
+	_render_fighter(player, dummy, _player_flash, _player_head, _player_torso)
+	_render_fighter(dummy, player, _dummy_flash, _dummy_head, _dummy_torso)
+
+func _render_fighter(self_f: Fighter, foe: Fighter, flash: Dictionary, head: ColorRect, torso: ColorRect) -> void:
+	head.color = _region_color(Combat.Region.HIGH, self_f, foe, flash)
+	torso.color = _region_color(Combat.Region.MID, self_f, foe, flash)
+
+func _region_color(region: int, self_f: Fighter, foe: Fighter, flash: Dictionary) -> Color:
+	if not flash.is_empty() and flash["region"] == region:
+		return flash["color"]
+	if self_f.block == region:
+		return COLOR_GUARD
+	if foe.punch_phase == Combat.PunchPhase.WINDUP and foe.punch_region == region:
+		return COLOR_TELEGRAPH
+	return COLOR_NEUTRAL
 
 ## --- Local player input (right thumb = punches, left thumb = blocks) ---
 
@@ -105,7 +152,7 @@ func _do_dummy_action() -> void:
 		dummy.throw_punch(Combat.Region.HIGH if randf() < 0.5 else Combat.Region.MID, tick)
 	_schedule_next_dummy_action()
 
-## --- UI construction (placeholder art: ColorRects, per Phase 2 scope) ---
+## --- UI construction (placeholder art: head/torso ColorRects, per Phase 2 scope) ---
 
 func _build_ui() -> void:
 	var root := Control.new()
@@ -123,16 +170,20 @@ func _build_ui() -> void:
 	_status_label.position = Vector2(560, 16)
 	root.add_child(_status_label)
 
-	# Opponent (LEFT) — dummy.
-	_dummy_rect = ColorRect.new()
-	_dummy_rect.color = PHASE_COLOR[0]
-	_dummy_rect.size = Vector2(120, 240)
-	_dummy_rect.position = Vector2(260, 240)
-	root.add_child(_dummy_rect)
+	var legend := Label.new()
+	legend.text = "Yellow = incoming attack, block it! Blue = guarding. Green = blocked. Red = hit."
+	legend.position = Vector2(320, 640)
+	root.add_child(legend)
+
+	# Opponent — was rendering on the wrong side, so this x is swapped from
+	# the original "left" value; verify on-screen and flip back if needed.
+	var dummy_parts := _build_fighter_body(root, 900)
+	_dummy_head = dummy_parts[0]
+	_dummy_torso = dummy_parts[1]
 
 	var dummy_label := Label.new()
 	dummy_label.text = "DUMMY"
-	dummy_label.position = Vector2(280, 210)
+	dummy_label.position = Vector2(920, 150)
 	root.add_child(dummy_label)
 
 	_dummy_health_bar = ProgressBar.new()
@@ -140,19 +191,17 @@ func _build_ui() -> void:
 	_dummy_health_bar.max_value = Combat.MAX_HEALTH
 	_dummy_health_bar.value = Combat.MAX_HEALTH
 	_dummy_health_bar.size = Vector2(240, 24)
-	_dummy_health_bar.position = Vector2(200, 480)
+	_dummy_health_bar.position = Vector2(840, 560)
 	root.add_child(_dummy_health_bar)
 
-	# Local player (RIGHT).
-	_player_rect = ColorRect.new()
-	_player_rect.color = PHASE_COLOR[0]
-	_player_rect.size = Vector2(120, 240)
-	_player_rect.position = Vector2(900, 240)
-	root.add_child(_player_rect)
+	# Local player — swapped for the same reason as the dummy above.
+	var player_parts := _build_fighter_body(root, 260)
+	_player_head = player_parts[0]
+	_player_torso = player_parts[1]
 
 	var player_label := Label.new()
 	player_label.text = "YOU"
-	player_label.position = Vector2(940, 210)
+	player_label.position = Vector2(280, 150)
 	root.add_child(player_label)
 
 	_player_health_bar = ProgressBar.new()
@@ -160,7 +209,7 @@ func _build_ui() -> void:
 	_player_health_bar.max_value = Combat.MAX_HEALTH
 	_player_health_bar.value = Combat.MAX_HEALTH
 	_player_health_bar.size = Vector2(240, 24)
-	_player_health_bar.position = Vector2(840, 480)
+	_player_health_bar.position = Vector2(200, 560)
 	root.add_child(_player_health_bar)
 
 	# LEFT thumb: blocks (HIGH = face, MID = body) — mutually exclusive by
@@ -173,8 +222,28 @@ func _build_ui() -> void:
 	root.add_child(_make_button("PUNCH\nHIGH", Vector2(1060, 200), _on_punch_high))
 	root.add_child(_make_button("PUNCH\nMID", Vector2(1060, 380), _on_punch_mid))
 
+	_render_regions()
+
 	_result_panel = _build_result_panel()
 	root.add_child(_result_panel)
+
+## Builds a simple head (HIGH region) over torso (MID region) shape at the
+## given x — makes it obvious at a glance which color belongs to which
+## attack/block region, unlike a single flat-color block.
+func _build_fighter_body(root: Control, x: float) -> Array[ColorRect]:
+	var head := ColorRect.new()
+	head.color = COLOR_NEUTRAL
+	head.size = Vector2(80, 80)
+	head.position = Vector2(x + 20, 180)
+	root.add_child(head)
+
+	var torso := ColorRect.new()
+	torso.color = COLOR_NEUTRAL
+	torso.size = Vector2(120, 160)
+	torso.position = Vector2(x, 260)
+	root.add_child(torso)
+
+	return [head, torso]
 
 func _make_button(text: String, pos: Vector2, on_pressed: Callable) -> Button:
 	var b := Button.new()
