@@ -1,0 +1,27 @@
+; Dishum — Godot 4 client project
+; Landscape-locked mobile game (Android + iOS from one codebase).
+; Engine configuration file.
+
+config_version=5
+
+[application]
+
+config/name="Dishum"
+config/description="Minimalist real-time multiplayer boxing."
+run/main_scene="res://scenes/Main.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+config/icon="res://icon.svg"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/handheld/orientation="landscape"
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
+[rendering]
+
+; GL Compatibility renderer = widest Android + iOS device support.
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
