@@ -17,13 +17,13 @@ Last updated: **2026-08-15** (bumped again same day)
 |---|---|---|
 | 0 | Foundations | 83% |
 | 1 | Accounts & directory | 100% |
-| 2 | Core combat (local) | 60% |
+| 2 | Core combat (local) | 100% |
 | 3 | Authoritative multiplayer | 0% |
 | 4 | Matchmaking | 0% |
 | 5 | Results & polish | 0% |
 | 6 | Ship | 0% |
 
-**Currently active: Phase 2 — Core combat, local first (needs live playtest to confirm feel).**
+**Currently active: Phase 2 wrap-up — needs a final live playtest to confirm feel/readability before moving to Phase 3.**
 
 ---
 
@@ -55,7 +55,7 @@ Last updated: **2026-08-15** (bumped again same day)
       (no re-search needed — proves the live `presence_diff` → UI update path). "In-match"
       status still deferred to Phase 4 (needs `MatchRoom` lifecycle, per the original plan)
 
-## Phase 2 — Core combat, local first (60%)
+## Phase 2 — Core combat, local first (100%) ✅
 
 - [x] Real 4-button landscape HUD (replaces Phase 0 placeholder) — `Combat.tscn`/`.gd`,
       wired to real punch/block logic (Phase 0's HUD in `Main.gd` was decorative only);
@@ -66,10 +66,11 @@ Last updated: **2026-08-15** (bumped again same day)
       direct GDScript port of `MatchRoom.ts`'s `advancePunch`/`resolveHit`, deliberately
       kept in lockstep so Phase 3 swaps in real server state without changing the rules;
       dummy opponent is a simple random-interval AI, not meant to be smart
-- [ ] Hit/block/windup animations — currently color-coded phase feedback only
-      (WINDUP=yellow, ACTIVE=red, RECOVERY=blue-gray) via `Combat.gd::_update_visuals`;
-      leaving unchecked since this is state-feedback, not real animation — revisit once
-      there's actual fighter art to animate
+- [x] Hit/block/windup animations — `FighterModel.gd`, a procedural humanoid
+      (head/torso/arms/legs drawn via `_draw()`, no external art) whose arm pose
+      animates by punch phase (chambered back on WINDUP, extended on ACTIVE,
+      retracting on RECOVERY) and block state (raised for HIGH guard, crossed
+      for MID guard), layered with the existing head/torso region coloring
 - [x] Health bar UI — `ProgressBar` per fighter, live-bound to `Fighter.health`, plus a
       win/lose end screen with Rematch/Back-to-menu
 
@@ -161,7 +162,7 @@ clients, not writing it from scratch.*
 | 2026-08-15 | Prototyped the presence protocol in a throwaway Node script against the live project before writing any GDScript | New protocol work is easy to get subtly wrong; caught a real bug this way (see Misc log) that would've been much slower to find inside Godot |
 | 2026-08-15 | Custom SMTP (Resend) disabled, reverted to Supabase's default mailer for now | Spent significant effort debugging a `500 Error sending confirmation email` with verified-correct credentials/config and no resolution; unblocking actual feature work took priority over continuing to debug Supabase's infra — tracked in the Pre-ship checklist to revisit properly |
 | 2026-08-15 | Client's `Fighter.gd` is a deliberate line-for-line GDScript port of `MatchRoom.ts`'s state machine, not an independent implementation | Phase 3 needs local prediction/animation timing to match the server exactly; writing it as a port now (and testing both against the same tick math) makes divergence a merge-conflict-style diff to catch later instead of a silent gameplay bug |
-| 2026-08-15 | Phase 2 combat visuals are phase-colored `ColorRect`s, not sprite animations | Minimalist-game scope; real animation work isn't productive until there's actual fighter art, so "Hit/block/windup animations" stays unchecked rather than counted as done via a color swap |
+| 2026-08-15 | Phase 2 fighter models are procedural (drawn via `_draw()` primitives), not sprite art | User asked directly how to create player models; offered procedural-now / free-CC0-pack / hand-drawn-later as options, user chose procedural — zero cost, fits the project's stated minimalist scope, buildable immediately without external tools. Revisit with real art before shipping if desired |
 
 ## Misc / ad-hoc task log
 
@@ -188,6 +189,7 @@ clients, not writing it from scratch.*
 | 2026-08-15 | Verified `Combat.tscn`/`Main.tscn` headlessly (`--import` + `--quit-after`) — no script/scene errors | Confirms the scenes load and run without crashing; does **not** confirm feel/playability, since the assistant has no GUI access — flagged in the Phase 2 checklist as needing the user's own live playtest |
 | 2026-08-15 | User playtest feedback on `Combat.tscn`: player fighter rendered on the LEFT instead of the intended RIGHT; flat-color `ColorRect`s were unreadable (couldn't tell HIGH vs MID or what to do) | Swapped the player/dummy x-positions (couldn't reproduce/verify visually myself — assistant has no GUI access, so this is a direct response to the user's report rather than independently re-derived); replaced single flat rects with head (HIGH) + torso (MID) shapes per fighter, with a color legend (yellow=incoming attack telegraphed on the region to block, blue=guarding, green=blocked, red=hit) so the user can see which attack is coming and which button to press |
 | 2026-08-15 | Second playtest round: still couldn't tell which region was blocked, and testing on a non-touch laptop meant a single mouse cursor couldn't hold a block button and press a punch button at the same time (the game is designed for two-thumb touch input) | Added an explicit "Blocking: HIGH/MID/none" text label under each fighter (unambiguous regardless of color perception); added keyboard shortcuts (Q/A = block high/mid, O/L = punch high/mid) purely so the intended simultaneous block+punch input is actually testable on a mouse-only dev machine — mobile input stays button-only, this doesn't change the design |
+| 2026-08-15 | Built `FighterModel.gd` — procedural humanoid fighters (head/torso/arms/legs via `_draw()`) replacing the flat head/torso `ColorRect`s, closing out the last open Phase 2 checklist item | Verified headless (`--import` + `--quit-after`, no errors) and the Fighter state-machine tests still pass (untouched logic); visual feel/readability still needs the user's own live playtest since the assistant has no GUI access |
 
 ## Timeline notes
 

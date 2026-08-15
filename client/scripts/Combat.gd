@@ -8,6 +8,7 @@ extends Node2D
 
 const Combat := preload("res://shared/CombatConstants.gd")
 const Fighter := preload("res://scripts/combat/Fighter.gd")
+const FighterModel := preload("res://scripts/combat/FighterModel.gd")
 
 const TICK_SECONDS := 1.0 / Combat.TICK_RATE_HZ
 const FLASH_SECONDS := 0.3  # how long a hit/block flash stays visible, independent of ACTIVE_TICKS
@@ -35,10 +36,8 @@ var _result_panel: Control
 var _player_flash := {}
 var _dummy_flash := {}
 
-var _player_head: ColorRect
-var _player_torso: ColorRect
-var _dummy_head: ColorRect
-var _dummy_torso: ColorRect
+var _player_model: FighterModel
+var _dummy_model: FighterModel
 
 func _ready() -> void:
 	_build_ui()
@@ -109,18 +108,20 @@ func _region_name(region: int) -> String:
 		Combat.Region.MID: return "MID"
 		_: return "none"
 
-## Each fighter is a head (HIGH region) + torso (MID region). Per region,
-## priority is: an active hit/block flash > a guard color if the fighter is
+## Each fighter's head (HIGH region) + torso (MID region) are colored, and
+## the model's arm pose reflects punch phase / block. Per-region color
+## priority: an active hit/block flash > a guard color if the fighter is
 ## blocking that region > a yellow telegraph if the OPPONENT is winding up a
 ## punch aimed at that region (this tells the player which block to press) >
 ## neutral.
 func _render_regions() -> void:
-	_render_fighter(player, dummy, _player_flash, _player_head, _player_torso)
-	_render_fighter(dummy, player, _dummy_flash, _dummy_head, _dummy_torso)
+	_render_fighter(player, dummy, _player_flash, _player_model)
+	_render_fighter(dummy, player, _dummy_flash, _dummy_model)
 
-func _render_fighter(self_f: Fighter, foe: Fighter, flash: Dictionary, head: ColorRect, torso: ColorRect) -> void:
-	head.color = _region_color(Combat.Region.HIGH, self_f, foe, flash)
-	torso.color = _region_color(Combat.Region.MID, self_f, foe, flash)
+func _render_fighter(self_f: Fighter, foe: Fighter, flash: Dictionary, model: FighterModel) -> void:
+	var head_color := _region_color(Combat.Region.HIGH, self_f, foe, flash)
+	var torso_color := _region_color(Combat.Region.MID, self_f, foe, flash)
+	model.set_state(head_color, torso_color, self_f.punch_phase, self_f.punch_region, self_f.block)
 
 func _region_color(region: int, self_f: Fighter, foe: Fighter, flash: Dictionary) -> Color:
 	if not flash.is_empty() and flash["region"] == region:
@@ -176,7 +177,7 @@ func _do_dummy_action() -> void:
 		dummy.throw_punch(Combat.Region.HIGH if randf() < 0.5 else Combat.Region.MID, tick)
 	_schedule_next_dummy_action()
 
-## --- UI construction (placeholder art: head/torso ColorRects, per Phase 2 scope) ---
+## --- UI construction (placeholder art: procedural FighterModel, per Phase 2 scope) ---
 
 func _build_ui() -> void:
 	var root := Control.new()
@@ -201,9 +202,8 @@ func _build_ui() -> void:
 
 	# Opponent — was rendering on the wrong side, so this x is swapped from
 	# the original "left" value; verify on-screen and flip back if needed.
-	var dummy_parts := _build_fighter_body(root, 900)
-	_dummy_head = dummy_parts[0]
-	_dummy_torso = dummy_parts[1]
+	# facing_right = false: arms extend left, toward the player.
+	_dummy_model = _build_fighter_model(root, 900, false)
 
 	var dummy_label := Label.new()
 	dummy_label.text = "DUMMY"
@@ -224,9 +224,8 @@ func _build_ui() -> void:
 	root.add_child(_dummy_block_label)
 
 	# Local player — swapped for the same reason as the dummy above.
-	var player_parts := _build_fighter_body(root, 260)
-	_player_head = player_parts[0]
-	_player_torso = player_parts[1]
+	# facing_right = true: arms extend right, toward the dummy.
+	_player_model = _build_fighter_model(root, 260, true)
 
 	var player_label := Label.new()
 	player_label.text = "YOU"
@@ -263,23 +262,14 @@ func _build_ui() -> void:
 	_result_panel = _build_result_panel()
 	root.add_child(_result_panel)
 
-## Builds a simple head (HIGH region) over torso (MID region) shape at the
-## given x — makes it obvious at a glance which color belongs to which
-## attack/block region, unlike a single flat-color block.
-func _build_fighter_body(root: Control, x: float) -> Array[ColorRect]:
-	var head := ColorRect.new()
-	head.color = COLOR_NEUTRAL
-	head.size = Vector2(80, 80)
-	head.position = Vector2(x + 20, 180)
-	root.add_child(head)
-
-	var torso := ColorRect.new()
-	torso.color = COLOR_NEUTRAL
-	torso.size = Vector2(120, 160)
-	torso.position = Vector2(x, 260)
-	root.add_child(torso)
-
-	return [head, torso]
+## Builds a procedural humanoid fighter (FighterModel) centered near x, with
+## its head roughly where the old placeholder head sat.
+func _build_fighter_model(root: Control, x: float, facing_right: bool) -> FighterModel:
+	var model := FighterModel.new()
+	model.facing_right = facing_right
+	model.position = Vector2(x + 60, 220)
+	root.add_child(model)
+	return model
 
 func _make_button(text: String, pos: Vector2, on_pressed: Callable) -> Button:
 	var b := Button.new()
