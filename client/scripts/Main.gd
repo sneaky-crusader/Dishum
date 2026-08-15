@@ -33,10 +33,22 @@ func _build_placeholder_hud() -> void:
 	logout.text = "Log out"
 	logout.position = Vector2(24, 80)
 	logout.pressed.connect(func():
+		PresenceClient.disconnect_presence()
 		AuthClient.sign_out()
 		get_tree().change_scene_to_file("res://scenes/Login.tscn")
 	)
 	root.add_child(logout)
+
+	var find_players := Button.new()
+	find_players.text = "Find Players"
+	find_players.position = Vector2(24, 112)
+	find_players.pressed.connect(func():
+		get_tree().change_scene_to_file("res://scenes/UserSearch.tscn")
+	)
+	root.add_child(find_players)
+
+	if AuthClient.is_logged_in():
+		PresenceClient.connect_and_track(AuthClient.current_user_id(), AuthClient.current_username())
 
 	# LEFT thumb: blocks (HIGH = face, MID = body) — mutually exclusive.
 	root.add_child(_make_button("BLOCK\nHIGH", Vector2(60, 200)))

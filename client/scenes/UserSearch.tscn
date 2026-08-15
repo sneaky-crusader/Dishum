@@ -1,0 +1,42 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/UserSearch.gd" id="1"]
+
+[node name="UserSearch" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1")
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="Box" type="VBoxContainer" parent="Center"]
+layout_mode = 2
+custom_minimum_size = Vector2(420, 480)
+
+[node name="Title" type="Label" parent="Center/Box"]
+layout_mode = 2
+horizontal_alignment = 1
+text = "Find Players"
+
+[node name="SearchEdit" type="LineEdit" parent="Center/Box"]
+layout_mode = 2
+placeholder_text = "Search username..."
+
+[node name="DebounceTimer" type="Timer" parent="Center/Box"]
+wait_time = 0.3
+one_shot = true
+
+[node name="ResultsList" type="VBoxContainer" parent="Center/Box"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="BackButton" type="Button" parent="Center/Box"]
+layout_mode = 2
+flat = true
+text = "Back"

@@ -15,6 +15,7 @@ config/icon="res://icon.svg"
 [autoload]
 
 AuthClient="*res://scripts/autoload/AuthClient.gd"
+PresenceClient="*res://scripts/autoload/PresenceClient.gd"
 
 [display]
 

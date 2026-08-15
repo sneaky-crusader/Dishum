@@ -16,14 +16,14 @@ Last updated: **2026-08-15** (bumped again same day)
 | Phase | Name | % complete |
 |---|---|---|
 | 0 | Foundations | 83% |
-| 1 | Accounts & directory | 67% |
+| 1 | Accounts & directory | 100% |
 | 2 | Core combat (local) | 0% |
 | 3 | Authoritative multiplayer | 0% |
 | 4 | Matchmaking | 0% |
 | 5 | Results & polish | 0% |
 | 6 | Ship | 0% |
 
-**Currently active: Phase 1 — Accounts & directory.**
+**Currently active: Phase 2 — Core combat, local first.**
 
 ---
 
@@ -36,7 +36,7 @@ Last updated: **2026-08-15** (bumped again same day)
 - [x] Git-init repo + first commit
 - [ ] Archive/remove legacy Android-only `app/` scaffold (deferred until Godot Android export is verified)
 
-## Phase 1 — Accounts & directory (67%)
+## Phase 1 — Accounts & directory (100%) ✅
 
 - [x] Write Supabase SQL migrations (`profiles`, `matches`, RLS, search index, `apply_match_result()`)
 - [x] Create Supabase project (account + provisioning) — project ref `griglxichqiwdffajwtz`
@@ -44,8 +44,16 @@ Last updated: **2026-08-15** (bumped again same day)
 - [x] Godot: register/login screens against Supabase Auth — `AuthClient.gd` autoload (REST via
       `HTTPRequest`, no native SDK) + `Login.tscn`/`Register.tscn`; verified end-to-end against
       the live project (real signup, real confirmation email, real login, session persistence)
-- [ ] Godot: username-search screen with online status
-- [ ] Wire presence (online/offline/in-match)
+- [x] Godot: username-search screen with online status — `UserSearch.tscn`/`.gd`, debounced
+      query against `profiles` REST endpoint; **verified live from the actual Godot client**
+      (not just headless) — searched a real second account by partial username and got the
+      right result with correct presence status
+- [x] Wire presence (online/offline/in-match) — `PresenceClient.gd`, hand-rolled Supabase
+      Realtime protocol; a Node prototype confirmed real join/track/presence_state/presence_diff/leave
+      against the live project, and the live Godot client confirmed a real second account
+      showing online, then automatically flipping to offline within seconds of disconnecting
+      (no re-search needed — proves the live `presence_diff` → UI update path). "In-match"
+      status still deferred to Phase 4 (needs `MatchRoom` lifecycle, per the original plan)
 
 ## Phase 2 — Core combat, local first (0%)
 
@@ -99,6 +107,18 @@ clients, not writing it from scratch.*
       arbitrary `setBlock`/`throwPunch` messages — server must not trust
       anything it doesn't itself compute), auth token handling on the client,
       rate limiting / abuse potential on matchmaking and auth endpoints.
+- [ ] **Fix transactional email (custom SMTP)** — currently running on Supabase's
+      *default* mailer (severe rate limits, unsuitable for real users). Attempted
+      Resend as custom SMTP; credentials/host/port verified 100% correct via a
+      standalone nodemailer test, and the config was confirmed correctly persisted
+      via both the Management API and the dashboard UI — but Supabase's auth
+      service still fails with `Error sending confirmation email` (HTTP 500) on
+      every real signup attempt while custom SMTP is enabled, with **zero**
+      corresponding attempts ever appearing in Resend's own delivery logs
+      (i.e. GoTrue fails before it even reaches Resend). Disabled custom SMTP
+      for now to unblock testing (reverted to default mailer). Needs a proper
+      investigation before shipping — likely a Supabase support ticket or
+      community search for this exact error, not more blind config tweaking.
 - [ ] **Test coverage** — write automated tests as real logic lands (combat
       state machine, `MatchRoom` hit resolution, `AuthClient` error
       translation, RLS/constraint behavior) and **re-run them regularly**,
@@ -121,6 +141,10 @@ clients, not writing it from scratch.*
 | 2026-08-15 | Registration = email + password + username, with mandatory email confirmation before login | User decision; confirmed the live project already enforces this by default (`mailer_autoconfirm: false`) |
 | 2026-08-15 | Auth via plain `HTTPRequest` REST calls to Supabase Auth, not a native GDExtension SDK | Keeps the iOS-compatibility guarantee — zero native plugin dependency, identical code path on Android/iOS/desktop |
 | 2026-08-15 | Client uses the `sb_publishable_...` key only; `sb_secret_...`/`service_role` never touches the client | Publishable key is designed to be public (RLS is the real boundary); secret key is reserved for the Colyseus server in Phase 5 |
+| 2026-08-15 | Presence = real Supabase Realtime (hand-rolled Phoenix-channel protocol), not a simpler last-seen timestamp | User's explicit choice over the recommended simpler alternative, accepting the extra protocol-implementation work |
+| 2026-08-15 | Protocol details for Realtime presence sourced from `realtime-js` SDK source, not Supabase's public docs | Docs only cover SDK usage, not the wire format (confirmed by fetching the docs page directly) — the source is the only accurate reference |
+| 2026-08-15 | Prototyped the presence protocol in a throwaway Node script against the live project before writing any GDScript | New protocol work is easy to get subtly wrong; caught a real bug this way (see Misc log) that would've been much slower to find inside Godot |
+| 2026-08-15 | Custom SMTP (Resend) disabled, reverted to Supabase's default mailer for now | Spent significant effort debugging a `500 Error sending confirmation email` with verified-correct credentials/config and no resolution; unblocking actual feature work took priority over continuing to debug Supabase's infra — tracked in the Pre-ship checklist to revisit properly |
 
 ## Misc / ad-hoc task log
 
@@ -139,6 +163,10 @@ clients, not writing it from scratch.*
 | 2026-08-15 | Verified auth error-message translation against real API responses, not assumptions | Duplicate-username-via-trigger returns HTTP 500 with `message` (not `msg`) containing `"unique constraint \"username_unique\""` — confirmed `AuthClient._translate_signup_error` catches it; confirmed the failed transaction leaves zero orphan `auth.users` rows; confirmed unconfirmed-email login returns `{"msg":"Email not confirmed"}`; confirmed re-signup on an unconfirmed email hits a resend rate-limit (429) rather than a hard duplicate error |
 | 2026-08-15 | Ran a full real register → confirm-email → login → fetch-profile cycle against the live project via curl (same calls `AuthClient.gd` makes), then deleted the test account | Proved the whole auth chain works end-to-end, not just "no error thrown"; cleanup confirmed the FK cascade removes the profile too |
 | 2026-08-15 | Added a standing pre-ship checklist (patent/IP check, security review, ongoing test coverage) | User instruction — don't let these get forgotten in the rush of feature work; tracked cross-phase since none of them belong to a single phase |
+| 2026-08-15 | Found and fixed a track-retrigger bug in the presence protocol prototype before it reached GDScript | Matched "any ok `phx_reply`" instead of specifically the join reply, so every `track` ack re-triggered another `track`, flooding the channel until the server returned `"Client presence rate limit exceeded"` and closed the connection. This is exactly why the plan called for prototyping in Node first — fixed there in seconds, would have been much slower to diagnose inside Godot |
+| 2026-08-15 | Confirmed a real protocol quirk: `presence_state` can arrive empty even when other members are already present | The subsequent `presence_diff` backfills them, so `PresenceClient.gd`'s merge logic (replace-on-state, merge-on-diff) already converges correctly — no code change needed, just confirms the design assumption was right |
+| 2026-08-15 | Extensive SMTP/Resend debugging session (see Decision log + Pre-ship checklist for the outcome) | Chronology: (1) direct nodemailer test proved Resend credentials 100% valid; (2) discovered the Management API's `config/auth` PATCH does **not** partial-merge — a single-field PATCH (`rate_limit_email_sent` alone) silently nulled every other SMTP field, which explains several of the earlier "still nothing" reports; (3) discovered repeated "test" signups to the *same* email were silent no-ops the whole time, since Supabase won't re-send confirmation for an already-confirmed identity (by design, anti-enumeration) — several rounds of "fix and retest" were actually retesting nothing; (4) with a genuinely fresh email and a complete atomic config write, got a real `500 Error sending confirmation email` with zero corresponding attempts in Resend's logs, meaning Supabase's auth service fails before ever reaching Resend; (5) discovered custom SMTP failure makes signup itself hard-fail (not just the email), blocking account creation entirely; (6) disabled custom SMTP to restore account creation via the default mailer, then used the already-approved manual-SQL-confirm pattern to unblock real testing |
+| 2026-08-15 | Ran the full live two-account search + presence test from the actual Godot client (not just curl/Node) | Registered `dishum_probe` via the (restored) default mailer, confirmed it via SQL, pointed the Node presence prototype at its *real* profile id (an earlier attempt used a fake id, which correctly found nothing — not a bug), then confirmed from the running Godot editor: search found it, presence dot showed online, and killing the prototype flipped the dot to offline automatically within seconds with no re-search — proving the live `presence_diff` → UI path works |
 
 ## Timeline notes
 

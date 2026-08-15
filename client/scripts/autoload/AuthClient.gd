@@ -28,6 +28,12 @@ func is_logged_in() -> bool:
 func current_username() -> String:
 	return _username
 
+func current_user_id() -> String:
+	return _user_id
+
+func access_token() -> String:
+	return _access_token
+
 ## Call once at boot. Emits signed_in if a valid/refreshable session exists,
 ## otherwise leaves the caller on the login screen (no signal fired).
 func try_restore_session() -> void:
