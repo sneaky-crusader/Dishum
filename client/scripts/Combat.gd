@@ -26,6 +26,8 @@ var _match_over := false
 
 var _player_health_bar: ProgressBar
 var _dummy_health_bar: ProgressBar
+var _player_block_label: Label
+var _dummy_block_label: Label
 var _status_label: Label
 var _result_panel: Control
 
@@ -97,7 +99,15 @@ func _end_match() -> void:
 func _update_visuals() -> void:
 	_player_health_bar.value = player.health
 	_dummy_health_bar.value = dummy.health
+	_player_block_label.text = "Blocking: %s" % _region_name(player.block)
+	_dummy_block_label.text = "Blocking: %s" % _region_name(dummy.block)
 	_render_regions()
+
+func _region_name(region: int) -> String:
+	match region:
+		Combat.Region.HIGH: return "HIGH"
+		Combat.Region.MID: return "MID"
+		_: return "none"
 
 ## Each fighter is a head (HIGH region) + torso (MID region). Per region,
 ## priority is: an active hit/block flash > a guard color if the fighter is
@@ -122,6 +132,20 @@ func _region_color(region: int, self_f: Fighter, foe: Fighter, flash: Dictionary
 	return COLOR_NEUTRAL
 
 ## --- Local player input (right thumb = punches, left thumb = blocks) ---
+##
+## A touchscreen lets you hold a block button and a punch button at the same
+## time with two thumbs; a single mouse cursor can't. Keyboard keys can be
+## held/pressed together, so they're added here purely so this scene is
+## actually testable on a non-touch laptop — mobile input stays button-only.
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	if not (event is InputEventKey) or not event.pressed or event.echo:
+		return
+	match event.physical_keycode:
+		KEY_Q: _on_block_high()
+		KEY_A: _on_block_mid()
+		KEY_O: _on_punch_high()
+		KEY_L: _on_punch_mid()
 
 func _on_block_high() -> void:
 	player.set_block(Combat.Region.HIGH)
@@ -194,6 +218,11 @@ func _build_ui() -> void:
 	_dummy_health_bar.position = Vector2(840, 560)
 	root.add_child(_dummy_health_bar)
 
+	_dummy_block_label = Label.new()
+	_dummy_block_label.text = "Blocking: none"
+	_dummy_block_label.position = Vector2(840, 590)
+	root.add_child(_dummy_block_label)
+
 	# Local player — swapped for the same reason as the dummy above.
 	var player_parts := _build_fighter_body(root, 260)
 	_player_head = player_parts[0]
@@ -212,15 +241,22 @@ func _build_ui() -> void:
 	_player_health_bar.position = Vector2(200, 560)
 	root.add_child(_player_health_bar)
 
+	_player_block_label = Label.new()
+	_player_block_label.text = "Blocking: none"
+	_player_block_label.position = Vector2(200, 590)
+	root.add_child(_player_block_label)
+
 	# LEFT thumb: blocks (HIGH = face, MID = body) — mutually exclusive by
 	# construction (set_block just overwrites the single `block` field).
-	root.add_child(_make_button("BLOCK\nHIGH", Vector2(60, 200), _on_block_high))
-	root.add_child(_make_button("BLOCK\nMID", Vector2(60, 380), _on_block_mid))
+	# [Q]/[A] keyboard equivalents let you hold a block and press a punch key
+	# at the same moment, which a single mouse cursor can't do.
+	root.add_child(_make_button("BLOCK\nHIGH [Q]", Vector2(60, 200), _on_block_high))
+	root.add_child(_make_button("BLOCK\nMID [A]", Vector2(60, 380), _on_block_mid))
 
 	# RIGHT thumb: punches (HIGH, MID) — mutually exclusive via the
-	# one-punch-at-a-time rule in Fighter.throw_punch.
-	root.add_child(_make_button("PUNCH\nHIGH", Vector2(1060, 200), _on_punch_high))
-	root.add_child(_make_button("PUNCH\nMID", Vector2(1060, 380), _on_punch_mid))
+	# one-punch-at-a-time rule in Fighter.throw_punch. [O]/[L] key equivalents.
+	root.add_child(_make_button("PUNCH\nHIGH [O]", Vector2(1060, 200), _on_punch_high))
+	root.add_child(_make_button("PUNCH\nMID [L]", Vector2(1060, 380), _on_punch_mid))
 
 	_render_regions()
 
