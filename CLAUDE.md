@@ -13,4 +13,15 @@
   about project status — it reads `docs/PROGRESS.md` and reports per-phase and
   overall completion. Don't answer progress questions from memory; read the file.
 
+- **Write test cases as real logic lands, and re-run them regularly** — not
+  just once when written. User's explicit standing instruction. Applies to
+  things like the combat state machine, `MatchRoom` hit resolution,
+  `AuthClient` error translation, and DB constraint/RLS behavior. When
+  touching code that has tests, run them; when adding non-trivial logic that
+  doesn't have any yet, add some.
+
+- **Pre-ship checklist exists in `docs/PROGRESS.md`** (patent/IP check,
+  security review, test coverage) — cross-cutting, not tied to one phase.
+  Re-surface it as shipping approaches; don't let it get lost in feature work.
+
 - See `docs/PROPOSAL.md` for the full architecture/roadmap this tracker follows.

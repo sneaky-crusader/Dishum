@@ -87,6 +87,26 @@ clients, not writing it from scratch.*
 
 ---
 
+## Pre-ship checklist (cross-cutting, not tied to one phase)
+
+- [ ] **Patent/IP check** — decide whether the game concept/mechanics are worth
+      filing for or otherwise protecting before any public/wide release.
+      Needs a real decision (likely with a lawyer), not just a Claude opinion —
+      flag this again as ship approaches, don't let it get missed.
+- [ ] **Security review before shipping** — at minimum: RLS policy audit on
+      `profiles`/`matches`, confirm `sb_secret_`/`service_role` key never left
+      the server, Colyseus input validation (a malicious client can send
+      arbitrary `setBlock`/`throwPunch` messages — server must not trust
+      anything it doesn't itself compute), auth token handling on the client,
+      rate limiting / abuse potential on matchmaking and auth endpoints.
+- [ ] **Test coverage** — write automated tests as real logic lands (combat
+      state machine, `MatchRoom` hit resolution, `AuthClient` error
+      translation, RLS/constraint behavior) and **re-run them regularly**,
+      not just once at write-time — user's explicit standing instruction,
+      also captured in `CLAUDE.md`.
+
+---
+
 ## Decision log
 
 | Date | Decision | Why |
@@ -118,6 +138,7 @@ clients, not writing it from scratch.*
 | 2026-08-15 | Linked and pushed to GitHub remote `github.com/sneaky-crusader/Dishum` (`origin/master`) | Repo was empty on GitHub, so pushed all local history with no conflicts; existing Git Credential Manager handled auth |
 | 2026-08-15 | Verified auth error-message translation against real API responses, not assumptions | Duplicate-username-via-trigger returns HTTP 500 with `message` (not `msg`) containing `"unique constraint \"username_unique\""` — confirmed `AuthClient._translate_signup_error` catches it; confirmed the failed transaction leaves zero orphan `auth.users` rows; confirmed unconfirmed-email login returns `{"msg":"Email not confirmed"}`; confirmed re-signup on an unconfirmed email hits a resend rate-limit (429) rather than a hard duplicate error |
 | 2026-08-15 | Ran a full real register → confirm-email → login → fetch-profile cycle against the live project via curl (same calls `AuthClient.gd` makes), then deleted the test account | Proved the whole auth chain works end-to-end, not just "no error thrown"; cleanup confirmed the FK cascade removes the profile too |
+| 2026-08-15 | Added a standing pre-ship checklist (patent/IP check, security review, ongoing test coverage) | User instruction — don't let these get forgotten in the rush of feature work; tracked cross-phase since none of them belong to a single phase |
 
 ## Timeline notes
 
