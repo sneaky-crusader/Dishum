@@ -1,24 +1,19 @@
 extends Node2D
-## Dishum — Phase 0 placeholder main scene.
+## Dishum — post-login home/menu screen.
 ##
-## Draws the intended landscape HUD so we can validate the touch layout on a
-## real device early: blocks on the LEFT thumb, punches on the RIGHT thumb,
-## local fighter on the RIGHT, opponent facing from the LEFT.
-## Real combat + netcode arrive in Phases 2–3.
-
-const Combat := preload("res://shared/CombatConstants.gd")
+## The real 4-button combat HUD now lives in Combat.tscn (Phase 2); this
+## screen is just navigation: identity, logout, find players, and practice.
 
 func _ready() -> void:
-	_build_placeholder_hud()
-	print("Dishum client up. Tick rate = %d Hz" % Combat.TICK_RATE_HZ)
+	_build_menu()
 
-func _build_placeholder_hud() -> void:
+func _build_menu() -> void:
 	var root := Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(root)
 
 	var title := Label.new()
-	title.text = "DISHUM — landscape HUD (placeholder)"
+	title.text = "DISHUM"
 	title.position = Vector2(24, 16)
 	root.add_child(title)
 
@@ -50,17 +45,10 @@ func _build_placeholder_hud() -> void:
 	if AuthClient.is_logged_in():
 		PresenceClient.connect_and_track(AuthClient.current_user_id(), AuthClient.current_username())
 
-	# LEFT thumb: blocks (HIGH = face, MID = body) — mutually exclusive.
-	root.add_child(_make_button("BLOCK\nHIGH", Vector2(60, 200)))
-	root.add_child(_make_button("BLOCK\nMID", Vector2(60, 380)))
-
-	# RIGHT thumb: punches (HIGH, MID) — mutually exclusive.
-	root.add_child(_make_button("PUNCH\nHIGH", Vector2(1060, 200)))
-	root.add_child(_make_button("PUNCH\nMID", Vector2(1060, 380)))
-
-func _make_button(text: String, pos: Vector2) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.custom_minimum_size = Vector2(160, 140)
-	b.position = pos
-	return b
+	var practice := Button.new()
+	practice.text = "Practice (vs Dummy)"
+	practice.position = Vector2(24, 144)
+	practice.pressed.connect(func():
+		get_tree().change_scene_to_file("res://scenes/Combat.tscn")
+	)
+	root.add_child(practice)

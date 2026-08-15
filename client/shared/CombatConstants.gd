@@ -19,3 +19,6 @@ const CHIP_DAMAGE := 0            # blocked hit (0 = clean block; tune later)
 
 # Regions (shared enum values; must match server)
 enum Region { NONE = 0, HIGH = 1, MID = 2 }
+
+# Punch phases (shared enum values; must match server's PunchPhase)
+enum PunchPhase { NONE = 0, WINDUP = 1, ACTIVE = 2, RECOVERY = 3 }

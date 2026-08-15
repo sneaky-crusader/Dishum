@@ -17,13 +17,13 @@ Last updated: **2026-08-15** (bumped again same day)
 |---|---|---|
 | 0 | Foundations | 83% |
 | 1 | Accounts & directory | 100% |
-| 2 | Core combat (local) | 0% |
+| 2 | Core combat (local) | 60% |
 | 3 | Authoritative multiplayer | 0% |
 | 4 | Matchmaking | 0% |
 | 5 | Results & polish | 0% |
 | 6 | Ship | 0% |
 
-**Currently active: Phase 2 — Core combat, local first.**
+**Currently active: Phase 2 — Core combat, local first (needs live playtest to confirm feel).**
 
 ---
 
@@ -55,13 +55,28 @@ Last updated: **2026-08-15** (bumped again same day)
       (no re-search needed — proves the live `presence_diff` → UI update path). "In-match"
       status still deferred to Phase 4 (needs `MatchRoom` lifecycle, per the original plan)
 
-## Phase 2 — Core combat, local first (0%)
+## Phase 2 — Core combat, local first (60%)
 
-- [ ] Real 4-button landscape HUD (replaces Phase 0 placeholder)
-- [ ] Fighter art/placeholders (right = local, left = opponent)
-- [ ] Client-side combat state machine vs. a local/dummy opponent
-- [ ] Hit/block/windup animations
-- [ ] Health bar UI
+- [x] Real 4-button landscape HUD (replaces Phase 0 placeholder) — `Combat.tscn`/`.gd`,
+      wired to real punch/block logic (Phase 0's HUD in `Main.gd` was decorative only);
+      `Main.gd` is now a plain post-login menu (identity, logout, find players, practice)
+- [x] Fighter art/placeholders (right = local, left = opponent) — `ColorRect` placeholders
+      with labels, positioned per the agreed layout (local RIGHT, opponent LEFT)
+- [x] Client-side combat state machine vs. a local/dummy opponent — `Fighter.gd` is a
+      direct GDScript port of `MatchRoom.ts`'s `advancePunch`/`resolveHit`, deliberately
+      kept in lockstep so Phase 3 swaps in real server state without changing the rules;
+      dummy opponent is a simple random-interval AI, not meant to be smart
+- [ ] Hit/block/windup animations — currently color-coded phase feedback only
+      (WINDUP=yellow, ACTIVE=red, RECOVERY=blue-gray) via `Combat.gd::_update_visuals`;
+      leaving unchecked since this is state-feedback, not real animation — revisit once
+      there's actual fighter art to animate
+- [x] Health bar UI — `ProgressBar` per fighter, live-bound to `Fighter.health`, plus a
+      win/lose end screen with Rematch/Back-to-menu
+
+**Not yet live-verified** — headless smoke tests (`--import`, `--quit-after`) pass with
+no script/scene errors, and the state machine itself has unit tests (see below), but the
+assistant has no GUI access, so actual feel/playability needs the user to run it via
+`open-editor.bat` → Practice (vs Dummy).
 
 ## Phase 3 — Authoritative multiplayer (0%)
 
@@ -145,6 +160,8 @@ clients, not writing it from scratch.*
 | 2026-08-15 | Protocol details for Realtime presence sourced from `realtime-js` SDK source, not Supabase's public docs | Docs only cover SDK usage, not the wire format (confirmed by fetching the docs page directly) — the source is the only accurate reference |
 | 2026-08-15 | Prototyped the presence protocol in a throwaway Node script against the live project before writing any GDScript | New protocol work is easy to get subtly wrong; caught a real bug this way (see Misc log) that would've been much slower to find inside Godot |
 | 2026-08-15 | Custom SMTP (Resend) disabled, reverted to Supabase's default mailer for now | Spent significant effort debugging a `500 Error sending confirmation email` with verified-correct credentials/config and no resolution; unblocking actual feature work took priority over continuing to debug Supabase's infra — tracked in the Pre-ship checklist to revisit properly |
+| 2026-08-15 | Client's `Fighter.gd` is a deliberate line-for-line GDScript port of `MatchRoom.ts`'s state machine, not an independent implementation | Phase 3 needs local prediction/animation timing to match the server exactly; writing it as a port now (and testing both against the same tick math) makes divergence a merge-conflict-style diff to catch later instead of a silent gameplay bug |
+| 2026-08-15 | Phase 2 combat visuals are phase-colored `ColorRect`s, not sprite animations | Minimalist-game scope; real animation work isn't productive until there's actual fighter art, so "Hit/block/windup animations" stays unchecked rather than counted as done via a color swap |
 
 ## Misc / ad-hoc task log
 
@@ -167,6 +184,8 @@ clients, not writing it from scratch.*
 | 2026-08-15 | Confirmed a real protocol quirk: `presence_state` can arrive empty even when other members are already present | The subsequent `presence_diff` backfills them, so `PresenceClient.gd`'s merge logic (replace-on-state, merge-on-diff) already converges correctly — no code change needed, just confirms the design assumption was right |
 | 2026-08-15 | Extensive SMTP/Resend debugging session (see Decision log + Pre-ship checklist for the outcome) | Chronology: (1) direct nodemailer test proved Resend credentials 100% valid; (2) discovered the Management API's `config/auth` PATCH does **not** partial-merge — a single-field PATCH (`rate_limit_email_sent` alone) silently nulled every other SMTP field, which explains several of the earlier "still nothing" reports; (3) discovered repeated "test" signups to the *same* email were silent no-ops the whole time, since Supabase won't re-send confirmation for an already-confirmed identity (by design, anti-enumeration) — several rounds of "fix and retest" were actually retesting nothing; (4) with a genuinely fresh email and a complete atomic config write, got a real `500 Error sending confirmation email` with zero corresponding attempts in Resend's logs, meaning Supabase's auth service fails before ever reaching Resend; (5) discovered custom SMTP failure makes signup itself hard-fail (not just the email), blocking account creation entirely; (6) disabled custom SMTP to restore account creation via the default mailer, then used the already-approved manual-SQL-confirm pattern to unblock real testing |
 | 2026-08-15 | Ran the full live two-account search + presence test from the actual Godot client (not just curl/Node) | Registered `dishum_probe` via the (restored) default mailer, confirmed it via SQL, pointed the Node presence prototype at its *real* profile id (an earlier attempt used a fake id, which correctly found nothing — not a bug), then confirmed from the running Godot editor: search found it, presence dot showed online, and killing the prototype flipped the dot to offline automatically within seconds with no re-search — proving the live `presence_diff` → UI path works |
+| 2026-08-15 | Added `client/tests/test_fighter.gd`, a headless GDScript test suite for the punch state machine | Run via `godot --headless --path client --script tests/test_fighter.gd`; 9 assertions across 5 scenarios (unguarded hit, guarded block, one-punch-at-a-time, full WINDUP→ACTIVE→RECOVERY→NONE lifecycle + re-throw, KO health clamp), all passing. Per the standing test-writing instruction — written alongside the logic, not after |
+| 2026-08-15 | Verified `Combat.tscn`/`Main.tscn` headlessly (`--import` + `--quit-after`) — no script/scene errors | Confirms the scenes load and run without crashing; does **not** confirm feel/playability, since the assistant has no GUI access — flagged in the Phase 2 checklist as needing the user's own live playtest |
 
 ## Timeline notes
 
