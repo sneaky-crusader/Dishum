@@ -8,16 +8,11 @@ extends Node2D
 
 const Combat := preload("res://shared/CombatConstants.gd")
 const Fighter := preload("res://scripts/combat/Fighter.gd")
-const FighterModel := preload("res://scripts/combat/FighterModel.gd")
+const Fighter3D := preload("res://scripts/combat/Fighter3D.gd")
+const Colors := preload("res://scripts/combat/CombatColors.gd")
 
 const TICK_SECONDS := 1.0 / Combat.TICK_RATE_HZ
 const FLASH_SECONDS := 0.3  # how long a hit/block flash stays visible, independent of ACTIVE_TICKS
-
-const COLOR_NEUTRAL := Color(0.75, 0.72, 0.65)   # skin tone, nothing happening
-const COLOR_GUARD := Color(0.25, 0.45, 0.9)      # this region is being guarded
-const COLOR_TELEGRAPH := Color(0.95, 0.85, 0.15) # an incoming punch is winding up toward this region
-const COLOR_HIT := Color(0.9, 0.15, 0.15)        # this region was just hit
-const COLOR_BLOCKED := Color(0.2, 0.8, 0.35)     # an incoming punch here was just blocked
 
 var player := Fighter.new()
 var dummy := Fighter.new()
@@ -36,8 +31,8 @@ var _result_panel: Control
 var _player_flash := {}
 var _dummy_flash := {}
 
-var _player_model: FighterModel
-var _dummy_model: FighterModel
+var _player_model: Fighter3D
+var _dummy_model: Fighter3D
 
 func _ready() -> void:
 	_build_ui()
@@ -72,10 +67,10 @@ func _resolve(attacker: Fighter, target: Fighter, attacker_label: String, target
 	var outcome := attacker.resolve_against(target)
 	if outcome == "hit":
 		_status_label.text = "%s landed a hit!" % attacker_label
-		_set_flash(target_flash, attacker.punch_region, COLOR_HIT)
+		_set_flash(target_flash, attacker.punch_region, Colors.HIT)
 	elif outcome == "blocked":
 		_status_label.text = "%s's punch was blocked." % attacker_label
-		_set_flash(target_flash, attacker.punch_region, COLOR_BLOCKED)
+		_set_flash(target_flash, attacker.punch_region, Colors.BLOCKED)
 
 func _set_flash(flash: Dictionary, region: int, color: Color) -> void:
 	flash["region"] = region
@@ -118,7 +113,7 @@ func _render_regions() -> void:
 	_render_fighter(player, dummy, _player_flash, _player_model)
 	_render_fighter(dummy, player, _dummy_flash, _dummy_model)
 
-func _render_fighter(self_f: Fighter, foe: Fighter, flash: Dictionary, model: FighterModel) -> void:
+func _render_fighter(self_f: Fighter, foe: Fighter, flash: Dictionary, model: Fighter3D) -> void:
 	var head_color := _region_color(Combat.Region.HIGH, self_f, foe, flash)
 	var torso_color := _region_color(Combat.Region.MID, self_f, foe, flash)
 	model.set_state(head_color, torso_color, self_f.punch_phase, self_f.punch_region, self_f.block)
@@ -127,10 +122,10 @@ func _region_color(region: int, self_f: Fighter, foe: Fighter, flash: Dictionary
 	if not flash.is_empty() and flash["region"] == region:
 		return flash["color"]
 	if self_f.block == region:
-		return COLOR_GUARD
+		return Colors.GUARD
 	if foe.punch_phase == Combat.PunchPhase.WINDUP and foe.punch_region == region:
-		return COLOR_TELEGRAPH
-	return COLOR_NEUTRAL
+		return Colors.TELEGRAPH
+	return Colors.NEUTRAL
 
 ## --- Local player input (right thumb = punches, left thumb = blocks) ---
 ##
@@ -177,7 +172,8 @@ func _do_dummy_action() -> void:
 		dummy.throw_punch(Combat.Region.HIGH if randf() < 0.5 else Combat.Region.MID, tick)
 	_schedule_next_dummy_action()
 
-## --- UI construction (placeholder art: procedural FighterModel, per Phase 2 scope) ---
+## --- UI construction (fighters render via Fighter3D — see its header for
+## how to swap the capsule placeholder for a real character) ---
 
 func _build_ui() -> void:
 	var root := Control.new()
@@ -196,7 +192,7 @@ func _build_ui() -> void:
 	root.add_child(_status_label)
 
 	var legend := Label.new()
-	legend.text = "Yellow = incoming attack, block it! Blue = guarding. Green = blocked. Red = hit."
+	legend.text = "Dots: yellow = incoming attack, block it! Blue = guarding. Green = blocked. Red = hit."
 	legend.position = Vector2(320, 640)
 	root.add_child(legend)
 
@@ -262,12 +258,12 @@ func _build_ui() -> void:
 	_result_panel = _build_result_panel()
 	root.add_child(_result_panel)
 
-## Builds a procedural humanoid fighter (FighterModel) centered near x, with
-## its head roughly where the old placeholder head sat.
-func _build_fighter_model(root: Control, x: float, facing_right: bool) -> FighterModel:
-	var model := FighterModel.new()
+## Builds a 3D fighter (Fighter3D — capsule placeholder until a real
+## character is assigned) positioned near x.
+func _build_fighter_model(root: Control, x: float, facing_right: bool) -> Fighter3D:
+	var model := Fighter3D.new()
 	model.facing_right = facing_right
-	model.position = Vector2(x + 60, 220)
+	model.position = Vector2(x, 150)
 	root.add_child(model)
 	return model
 
