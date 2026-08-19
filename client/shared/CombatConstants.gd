@@ -9,7 +9,13 @@ const TICK_RATE_HZ := 30           # server tick; one tick = 1000/30 ≈ 33.3 ms
 
 # Punch lifecycle, measured in ticks (see PROPOSAL.md §2)
 const WINDUP_TICKS := 6            # reaction window before the punch turns active
-const ACTIVE_TICKS := 2           # hit is resolved on the first active tick
+# Extra ticks after WINDUP before the hit is actually resolved — a block
+# pressed after the punch visually turns active but within this window still
+# counts. Without this, blocking required reacting within WINDUP_TICKS alone
+# (200ms) to a telegraph that had *just* appeared, which is a bit fast for
+# a real human's reaction+recognition time — nobody could reliably block.
+const BLOCK_GRACE_TICKS := 6
+const ACTIVE_TICKS := 2           # how long the punch stays "active" after resolution, before recovery
 const RECOVERY_TICKS := 8         # cannot start a new punch until this completes
 
 # Damage / health

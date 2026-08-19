@@ -7,7 +7,7 @@ estimate changes. Query it any time with the `/progress` skill.
 Checklist convention: `- [x]` done, `- [ ]` not done. Phase % = checked ÷ total
 items in that phase's checklist.
 
-Last updated: **2026-08-15** (bumped again same day)
+Last updated: **2026-08-20**
 
 ---
 
@@ -23,7 +23,7 @@ Last updated: **2026-08-15** (bumped again same day)
 | 5 | Results & polish | 0% |
 | 6 | Ship | 0% |
 
-**Currently active: Phase 2 wrap-up — needs a final live playtest to confirm feel/readability before moving to Phase 3.**
+**Currently active: Phase 2 is closed (live-playtested and fixed). Next session starts Phase 3 — see Timeline notes for the concrete starting plan.**
 
 ---
 
@@ -74,10 +74,52 @@ Last updated: **2026-08-15** (bumped again same day)
 - [x] Health bar UI — `ProgressBar` per fighter, live-bound to `Fighter.health`, plus a
       win/lose end screen with Rematch/Back-to-menu
 
-**Not yet live-verified** — headless smoke tests (`--import`, `--quit-after`) pass with
-no script/scene errors, and the state machine itself has unit tests (see below), but the
-assistant has no GUI access, so actual feel/playability needs the user to run it via
-`open-editor.bat` → Practice (vs Dummy).
+**Live-verified by the user in the editor (2026-08-19/20)** — the user played
+Practice (vs Dummy) directly via `open-editor.bat` across several rounds and
+reported real bugs from actual play, all since found and fixed (see decision
+log + misc log for each): block not releasing when the key/button was
+released, punches visibly cutting off mid-swing, hit-reactions sometimes not
+rendering, the head/torso indicator dots and the later "HIT!"/"BLOCKED!" text
+floating far from the actual on-screen character (measured and corrected
+against a real pixel scan, not guessed), fighters standing almost a full
+body-width apart so punches visibly swung through air, and — the last and
+most gameplay-significant one — blocking a punch you'd correctly reacted to
+still counting as a hit, because resolution happened on the exact tick the
+punch turned active, giving a human only ~200ms from telegraph-appears to
+input-must-already-be-in. That last one is now a `BLOCK_GRACE_TICKS` window
+(200ms of extra reaction time after the punch turns active, mirrored on both
+client and server). Phase 2 is now genuinely closed, not just checklist-complete.
+
+**Animation reset, then re-sourced and wired the same day (2026-08-19):** the
+first round of Mixamo clips was deleted as too crude to keep patching (see
+decision log) and `Combat.gd` reverted to the capsule placeholder. The user
+then sourced a full second round against the agreed 8-state list — one
+consistent character/rig across all 8 downloads (`idle`, `upperblock`,
+`midblock`, `upperpunch`, `midpunch`, `upperhitreaction`, `midhitreaction`,
+`ko`) — and all 8 are now wired into `Combat.gd`/`Fighter3D.gd`:
+- Idle/guard-high/guard-mid loop continuously while active (all three are
+  stance-bounce clips, not single held poses — simpler than the first
+  round's freeze-mid-clip hack, and looks right)
+- Punch-high/punch-mid play once on the punch's NONE→triggered transition,
+  same mechanism as before, but this time the fist actually reaches the
+  opponent on screen (the first round's `Punching.fbx` never did)
+- Hit-reaction-high/mid are new: `Fighter3D.play_hit_reaction(region)` plays
+  once on the TARGET when `Combat._resolve()` sees outcome `"hit"`, then
+  auto-resumes idle/guard via a one-shot timer keyed to the clip's own length
+- KO is new: `Fighter3D.play_ko()` plays once and holds on `Combat._end_match()`
+  for the losing fighter's model
+
+Verified visually via a scripted, real-GPU-rendered headless run (13 PNG
+screenshots stepping through idle → punch → idle-resume → block-high →
+idle-resume → block-mid → hit-reaction-mid → idle-resume → hit-reaction-high
+→ idle-resume → KO-triggered → KO-mid-clip → KO-final-frame) — every state is
+visually distinct and transitions resume correctly. Also caught and fixed a
+tooling issue along the way: `--headless` forces Godot's dummy (no-op)
+renderer, so `viewport.get_texture()` is null under it — screenshotting a
+real render requires dropping `--headless` and using `--quit-after` on an
+otherwise-normal (GPU-backed) run instead.
+`test_fighter.gd`'s 11 assertions still pass unaffected (animation changes
+don't touch combat logic).
 
 ## Phase 3 — Authoritative multiplayer (0%)
 
@@ -162,9 +204,19 @@ clients, not writing it from scratch.*
 | 2026-08-15 | Prototyped the presence protocol in a throwaway Node script against the live project before writing any GDScript | New protocol work is easy to get subtly wrong; caught a real bug this way (see Misc log) that would've been much slower to find inside Godot |
 | 2026-08-15 | Custom SMTP (Resend) disabled, reverted to Supabase's default mailer for now | Spent significant effort debugging a `500 Error sending confirmation email` with verified-correct credentials/config and no resolution; unblocking actual feature work took priority over continuing to debug Supabase's infra — tracked in the Pre-ship checklist to revisit properly |
 | 2026-08-15 | Client's `Fighter.gd` is a deliberate line-for-line GDScript port of `MatchRoom.ts`'s state machine, not an independent implementation | Phase 3 needs local prediction/animation timing to match the server exactly; writing it as a port now (and testing both against the same tick math) makes divergence a merge-conflict-style diff to catch later instead of a silent gameplay bug |
+| 2026-08-19 | Added `BLOCK_GRACE_TICKS` (6 ticks / 200ms), decoupling hit resolution from the WINDUP→ACTIVE transition — a punch now resolves `BLOCK_GRACE_TICKS` after it turns ACTIVE, not on the same tick, using whatever block state is current at that later moment | User report: blocking a punch they'd correctly recognized and reacted to still counted as a hit. Root cause: resolution happened on the exact WINDUP→ACTIVE tick, giving a human only `WINDUP_TICKS` (200ms) from telegraph-appears to input-must-land — not enough reaction+recognition time for anyone to reliably block. Applied to both `Fighter.gd` (client) and `MatchRoom.ts`/`combat.ts` (server) to keep the mirrored implementations in lockstep per the standing decision above; added a `punchResolved` guard (non-networked field on `PlayerState`) so the now-separate resolve and RECOVERY-transition events don't double-fire. Two new tests added (`test_late_block_within_grace_window_still_counts`, `test_block_after_grace_window_is_too_late`) confirming both the fix and that blocking isn't made free by removing the deadline entirely |
 | 2026-08-15 | Phase 2 fighter models are procedural (drawn via `_draw()` primitives), not sprite art | User asked directly how to create player models; offered procedural-now / free-CC0-pack / hand-drawn-later as options, user chose procedural — zero cost, fits the project's stated minimalist scope, buildable immediately without external tools. Revisit with real art before shipping if desired |
 | 2026-08-15 | Fighters upgraded to real 3D characters via a SubViewport composited into the existing 2D Combat screen, not a full 3D scene conversion or pre-baked 2D sprites | User's explicit pick among three options with real tradeoffs; keeps the HUD/buttons/combat state machine entirely untouched, only swaps what renders the body. Region-state feedback (telegraph/guard/hit/blocked) moved from body fill color to small overlay indicator dots, since a real mesh has no "head color" to set |
 | 2026-08-15 | Character/animation source recommended: Mixamo (free) + Blender (free) to merge character + animations into one `.glb`, imported into Godot via `character_scene` | Zero-cost, well-documented community pipeline, includes ready-made punch/guard animations; Godot 4.3+'s native glTF import needs no extra plugin. Godot's own FBX importer was considered but multi-file animation merging is much better documented via the Blender NLA route |
+| 2026-08-19 | Each `Fighter3D`'s `SubViewport` sets `own_world_3d = true` | Root-caused a real rendering bug (not a logic bug): with two skinned characters animating in sibling `SubViewport`s under the GL Compatibility renderer, one of them silently failed to apply bone poses each frame (stuck near bind pose) despite `AnimationPlayer` correctly reporting `is_playing`/advancing position — the two viewports were sharing one `World3D` by default. Isolating each viewport's 3D world fixed it; confirmed via a real triggered punch through the actual game logic, not just a manual pose seek |
+| 2026-08-19 | Deleted the first round of Mixamo clips (`Punching`/`MutantPunch`/`BodyBlock`/`Boxing (1).fbx`) and reverted `Combat.gd`'s character wiring back to the capsule placeholder | User judged the clips too crude/abrupt (barely-extending punches, no clean guard pose) to keep tuning incrementally; decided to plan the full animation-state list up front and source deliberately per-state instead of patching one ad-hoc download at a time. `Fighter3D.gd`'s generic mechanism (clip donation via `add_animation()`, block-hold-then-freeze, idle-resume fix) was kept since it's clip-agnostic and still correct |
+| 2026-08-19 | Adopted an explicit 8-state animation list for fighters, agreed with the user before sourcing new clips: Idle (loop), Guard-High (raise+hold), Guard-Mid (raise+hold), Punch-High (single clip spanning windup→active→recovery), Punch-Mid (same), Hit-reaction-High, Hit-reaction-Mid, KO/lose pose | Maps 1:1 onto what `Fighter.gd` already tracks (`punch_phase` × 2 regions, `block` × 2 regions) plus two states the code doesn't yet drive a pose for (hit-reaction, KO) that were previously just color flashes/text; sourcing against a fixed list avoids the prior session's pattern of downloading one clip, wiring it, discovering it's wrong for the slot, and repeating |
+| 2026-08-19 | Guard-high/guard-mid clips play as continuous loops while the block is held, not frozen mid-clip at a chosen timestamp (the first round's approach) | The second-round clips are ~4s stance-bounce loops just like the first round's were, but rather than re-guessing a hold timestamp per clip, looping them continuously (same treatment as idle) is simpler and reads naturally as a boxer's guard stance — confirmed visually via the screenshot verification, not just assumed |
+| 2026-08-19 | Hit-reaction and KO poses added as new `Fighter3D` capabilities (`play_hit_reaction(region)`, `play_ko()`), called from `Combat.gd`'s `_resolve()`/`_end_match()` rather than threaded through the existing idle/block/punch state machine | These two are triggered by an event (a punch landing, health hitting 0), not a persistent state the fighter is "in" — hit-reaction auto-resumes idle/guard via a one-shot timer sized to the clip's own length; KO plays once and is never resumed from since the match is over |
+| 2026-08-19 | Block is now a true hold (keyboard key-up and button `button_down`/`button_up`), not a press-to-toggle; punch clips resume idle/guard via their own clip length (a `_token`-guarded one-shot timer) instead of on the game logic's phase returning to NONE | User-reported bugs after the first animation pass: (1) block stayed engaged after releasing the key/button since nothing ever called `set_block(NONE)` — both keyboard (`_unhandled_key_input` only handled `pressed`) and the on-screen buttons (single-shot `pressed` signal) only ever *set* a block, never cleared one; (2) punches visibly cut off mid-swing, root-caused to the sourced clips (~1s) being longer than the punch's actual tick lifecycle (WINDUP+ACTIVE+RECOVERY ≈ 0.53s at 30Hz) — the old code forced idle/guard the instant `phase` returned to `NONE`, well before the clip finished; (3) hit-reactions sometimes silently failed to render, same root cause — if a fighter's own punch finished on the same tick they got hit, the phase-driven reset could stomp the just-triggered hit reaction before it drew a frame. Fixed by decoupling animation resume timing from game-tick phase entirely: transient clips (punch, hit-reaction) resume via their own length on a token-guarded timer, so only the most recent transient clip's timer can act, and block changes only react to actual `block` value changes, not phase transitions. Verified via scripted GPU-rendered screenshots at the exact old cutoff point (arm still mid-swing) and a forced same-tick punch/hit-reaction collision (reaction correctly takes over and resumes cleanly) |
+| 2026-08-19 | Investigated a follow-up user report ("character stays in upper-block pose after an attack, even with no block pressed") — found no logic bug after exhaustive testing (11+ scripted scenarios, plus real `InputEventKey`/button-signal simulation through Godot's actual input pipeline, not just direct method calls); `player.block` and the AnimationPlayer's `current_animation` were always correct via direct engine-state inspection. Root cause instead: `idle.fbx`'s shadowboxing loop keeps hands raised near the face for its *entire* ~2.2s cycle (confirmed via an 11-frame filmstrip capture), so it looks similar to the guard pose throughout, not just momentarily — most noticeable right after an attack since that's when idle restarts from frame 0 | A "trim idle to a relaxed segment" fix (the first plan) turned out to be impossible — there's no relaxed segment in the source clip to trim to. Decided with the user to add explicit "HIT!"/"BLOCKED!" text callouts next to the affected fighter instead of trying to make body pose alone convey block state |
+| 2026-08-19 | Added floating "HIT!" (red) / "BLOCKED!" (green) text callouts above whichever fighter just took a punch, alongside the existing color indicator dot; bumped the shared flash duration `FLASH_SECONDS` 0.3s → 0.6s so there's time to actually read it | Direct user request — "colors are difficult [to read]" — text spells out the outcome explicitly rather than relying on the color-coded dot alone. Reuses the existing `_player_flash`/`_dummy_flash` dictionaries (added a `"text"` key) rather than a separate mechanism, so it shares the same show/hide timing as the dot |
+| 2026-08-19 | User caught (with an annotated screenshot) that the new text callouts, the head/torso indicator dots, AND the fighters' overall spacing were all wrong — dots floated in empty space above the actual head, fighters stood a full body-width apart so punches visibly swung through air, and the pair wasn't centered in the play area. Root cause: every one of these positions had been hand-guessed against assumed coordinates, never checked against where the character actually renders on screen | Fixed by measuring instead of guessing: wrote a diagnostic that scans a real rendered frame's pixel alpha channel to find the character's actual on-screen bounding box, head-row, and torso-row positions. Found the indicator dots were off by ~100px (the torso dot was sitting where the head actually is), and the idle-pose gap between fighters was ~140px — nearly a full body-width. Added `Fighter3D.HEAD_LOCAL_CENTER`/`TORSO_LOCAL_CENTER` (measured constants) that both the indicator dots and `Combat.gd`'s text-callout anchoring now derive from, instead of independent guessed offsets; moved fighters from x=220/480 to x=396/546 (closes the gap to ~30px and centers the pair between the block/punch button columns). Verified via GPU-rendered screenshots showing the fist actually in contact with the opponent's face and "HIT!"/the red dot both landing precisely on the head |
 
 ## Misc / ad-hoc task log
 
@@ -193,9 +245,47 @@ clients, not writing it from scratch.*
 | 2026-08-15 | Second playtest round: still couldn't tell which region was blocked, and testing on a non-touch laptop meant a single mouse cursor couldn't hold a block button and press a punch button at the same time (the game is designed for two-thumb touch input) | Added an explicit "Blocking: HIGH/MID/none" text label under each fighter (unambiguous regardless of color perception); added keyboard shortcuts (Q/A = block high/mid, O/L = punch high/mid) purely so the intended simultaneous block+punch input is actually testable on a mouse-only dev machine — mobile input stays button-only, this doesn't change the design |
 | 2026-08-15 | Built `FighterModel.gd` — procedural humanoid fighters (head/torso/arms/legs via `_draw()`) replacing the flat head/torso `ColorRect`s, closing out the last open Phase 2 checklist item | Verified headless (`--import` + `--quit-after`, no errors) and the Fighter state-machine tests still pass (untouched logic); visual feel/readability still needs the user's own live playtest since the assistant has no GUI access |
 | 2026-08-15 | User asked for real 3D-looking characters with punch/block animations; built `Fighter3D.gd` (SubViewport-composited 3D character, capsule placeholder + `character_scene`/animation-name export hooks) and `CombatColors.gd` (shared color constants so 2D and 3D renderers agree) | Chose live-3D-via-SubViewport over full 3D scene conversion or pre-baked 2D sprites (user's explicit pick — see decision log); caught a real bug in headless testing (`Camera3D.look_at()` called before the node was in the tree, `--quit-after` run threw immediately) and fixed it before considering this done |
+| 2026-08-18/19 | Multi-round debugging session wiring a real Mixamo character into `Fighter3D.gd`, closing the loop from placeholder capsule to actual animated punches | User sourced 3 different Mixamo `.fbx` downloads over the session (`Fighter.fbx`/"Punching Bag" — character only, no usable animation; `Boxing.fbx` — real motion but a crouched guard-bounce clip that read as a broken/doubled body at this viewport's resolution; `Punching.fbx` — the one that stuck, single clean punch clip). Chain of real bugs found and fixed along the way, each verified by actually rendering pixels (via a scripted headless-but-GPU-rendered Godot instance, `image.save_png()`) rather than assuming from code alone, after several rounds of guessing wrong: (1) `Fighter.fbx`'s only clip, `"Take 001"`, is a static T-pose bind-pose hold present in every Mixamo download regardless of animation chosen, not a usable idle — code was reverting to it after every punch, which is what actually caused the "stuck in T-pose" reports, not a rendering bug; (2) the "Beta" Mixamo character ships a second, invisible-by-design `*_Joints` rigging-cage mesh alongside the real skin mesh — both were rendering, causing a visible double-body ghost; (3) `_update_animation` re-triggered `AnimationPlayer.play()` on every internal WINDUP/ACTIVE/RECOVERY phase change within a single punch instead of once at punch-start, repeatedly restarting a ~1s clip that a punch resolves through in a fraction of a second; (4) the real root cause of a persistent "still looks broken" report after all of the above: two sibling `Fighter3D` `SubViewport`s (player + dummy) shared one `World3D` by default, and animating two skinned characters in it simultaneously under the GL Compatibility renderer left one stuck near bind-pose despite its `AnimationPlayer` correctly reporting `is_playing`/advancing position — fixed with `viewport.own_world_3d = true`. Also pulled `Fighter3D`'s camera back (`z=3.2→4.6`, `fov=60`) since a real punch's arm extension exceeded the old capsule-tuned frustum. Net effect: real punches now visibly animate correctly for both fighters simultaneously, verified via a real triggered punch through the actual game/combat logic (not just a manual animation seek) |
+| 2026-08-19 | Cleared and rebuilt `client/.godot/imported/` mid-session as a troubleshooting step | Done while chasing the doubled-body report above, to rule out stale editor import cache as the cause before finding the real `own_world_3d` bug; turned out not to be the cause, but confirmed the editor's cache wasn't the source of confusion |
+| 2026-08-19 | Fighters resized bigger and moved closer (`VIEWPORT_SIZE` 220x320→360x460, camera `z` 4.6→2.9, `fov` 60→52, positions tightened from a 640px gap to a deliberate ~100px viewport *overlap*, since backgrounds are transparent) and rotated to face each other (`rotation_degrees.y` 0/180 → 70/-70, a 3/4 stance) instead of both facing the camera dead-on | User feedback across several screenshots ("too small", "not facing each other", "hands not landing on each other"); caught and fixed a sign error on the first rotation attempt (player's punch reached away from the dummy, not toward it) by re-rendering and visually checking before calling it done. Investigated whether more closeness would fix "hands not landing" — frame-by-frame inspection of `Punching.fbx`'s clip showed the fist barely extends forward at any point (it's more of a guard bounce than a reaching jab), so no amount of distance-tuning fixes that; user chose to leave it as a placeholder rather than re-source the clip |
+| 2026-08-19 | Added `Fighter3D.add_animation()` — donates one Mixamo download's baked clip into another (same-rig) character's own `AnimationPlayer` under a new name, so a full move set can be assembled from several single-clip Mixamo downloads without swapping the whole character each time | Discovered `MutantPunch.fbx` and `BodyBlock.fbx` are the same "Beta" mesh/rig as `Punching.fbx` just with different baked motion, making this viable. Wired `MutantPunch.fbx` in as a distinct punch-mid clip; verified via a real triggered mid-punch through the actual game logic (distinct pose from punch-high, hit landed on the correct MID region) |
+| 2026-08-19 | Added an explicit test (`test_block_region_must_match_punch_region`) confirming a HIGH block never stops a MID punch and vice versa | Direct response to a user question about this exact behavior; the logic already existed and was implicitly covered, but wasn't named/asserted for this specific scenario — added for clarity and regression safety, not because a bug was found |
+| 2026-08-19 | `BodyBlock.fbx` wired in as the HIGH-block pose, with a real transition instead of an instant snap: pressing block now plays the donor clip forward from its own start (its baked low-guard→raised-guard motion serves as the "wind up") and freezes once playback passes a chosen timestamp (`guard_high_hold_time`), via `AnimationPlayer.stop(keep_state=true)` | User explicitly asked for a transition before the held pose, and for release to be instant rather than staying frozen. Two real bugs found and fixed via actual rendered verification, not assumption: (1) setting `current_animation` directly implicitly resumes playback, so an instant `seek()`-only "freeze" actually kept drifting through the rest of the clip — fixed by using `play()` + `seek()` + `stop(true)`; (2) `stop(keep_state=true)` clears `AnimationPlayer.current_animation` to empty even though it preserves the visible pose, which silently broke the release path's `if current_animation != ""` guard — fixed by tracking the clip name in a dedicated variable instead of relying on that property. Explicitly confirmed with the user this is visual-only — block still protects instantly per `docs/PROPOSAL.md`'s documented "hold state, instant on press" design; a real gameplay wind-up/vulnerability window was considered and declined |
+| 2026-08-19 | User asked for a continuous idle/shadow-boxing loop (`Boxing (1).fbx`, not the original `Boxing.fbx` from earlier in the session — a mid-session correction) whenever a fighter isn't blocking or punching, replacing the earlier "just freeze on whatever frame was last showing" behavior | Re-added a Boxing-named download since the original `Boxing.fbx` had been deleted earlier for reading as a broken/doubled body — that verdict predates the `own_world_3d` fix and may have been an unfair blame at the time, but the user pointed at a *different* file (`Boxing (1).fbx`) as the correct stance clip regardless, which was used. Confirmed same "Beta" rig (`mixamorig_Hips` bone naming matches), donated as `"idle"` via the existing `add_animation()` mechanism, set to loop. Restructured `Fighter3D._update_animation`'s block-release path to resume idle instead of freezing on the block clip's frame 0. **Not yet confirmed by a rendered screenshot** — session was cut short mid-verification; headless smoke tests and the full `test_fighter.gd` suite both pass, but re-render and visually confirm the idle→punch→idle and idle→block→idle transitions actually look right before trusting this is done |
 
 ## Timeline notes
 
 No calendar deadlines have been set yet — progress is tracked by phase/task
 completion, not dates. If a deadline or estimate is ever given, it will be
 logged here as: **date set → original estimate → revised estimate → reason**.
+
+## Next session plan (written 2026-08-20, end of the Phase 2 wrap-up session)
+
+Phase 2 is closed. Start Phase 3 — Authoritative multiplayer. Concrete
+starting points, in order:
+
+1. **Harden `MatchRoom.ts`'s tick loop past the Phase 0 stub.** The
+   `advancePunch`/`resolveHit` logic is already correct and in lockstep with
+   `Fighter.gd` (including the new `BLOCK_GRACE_TICKS` window from this
+   session) — this step is about production-hardening (reconnect handling,
+   malformed-input rejection, malicious-client input validation per the
+   pre-ship security checklist), not rewriting the rules.
+2. **Verify Supabase JWT on client connect** — the server currently trusts
+   any connection; needs real auth before two real clients can play.
+3. **Wire the Godot client to Colyseus** — replace `Combat.gd`'s local tick
+   loop + dummy AI with a real `Room<MatchState>` connection (join, send
+   `setBlock`/`throwPunch` messages, render from synced `MatchState` instead
+   of local `Fighter` instances). This is the biggest single chunk of work
+   in the phase — `Fighter3D`'s animation-driving `set_state()` call and the
+   HIT!/BLOCKED! text callouts should mostly just need to be fed from
+   server state instead of local state, since they were built against the
+   same `Combat.Region`/`PunchPhase` enums the server uses.
+4. **Interpolation/smoothing of opponent state** — needed once real network
+   latency is in the loop; local-only testing won't surface this, so budget
+   time for it rather than treating it as an afterthought.
+5. **Two real devices fighting over the internet, end to end** — the actual
+   phase-closing milestone.
+
+Also still open from Phase 0 (low priority, doesn't block Phase 3): archive
+the legacy Android-only `app/` scaffold, deferred until Godot Android export
+is verified.

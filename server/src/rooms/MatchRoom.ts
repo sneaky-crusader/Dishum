@@ -9,6 +9,7 @@ import {
   PunchPhase,
   TICK_MS,
   WINDUP_TICKS,
+  BLOCK_GRACE_TICKS,
   ACTIVE_TICKS,
   RECOVERY_TICKS,
   PUNCH_DAMAGE,
@@ -34,6 +35,7 @@ export class MatchRoom extends Room<{ state: MatchState }> {
         p.punchRegion = region;
         p.punchPhase = PunchPhase.WINDUP;
         p.punchStartTick = this.state.tick;
+        p.punchResolved = false;
       }
     });
 
@@ -66,22 +68,31 @@ export class MatchRoom extends Room<{ state: MatchState }> {
   }
 
   // Drives one player's punch through WINDUP → ACTIVE → RECOVERY → NONE and
-  // resolves the hit on the first ACTIVE tick.
+  // resolves the hit BLOCK_GRACE_TICKS after it turns ACTIVE (not on the
+  // same tick) — a block pressed shortly after the punch visually goes
+  // active still has a chance to land before the outcome is locked in.
   private advancePunch(p: PlayerState, all: PlayerState[]): void {
     if (p.punchPhase === PunchPhase.NONE) return;
     const elapsed = this.state.tick - p.punchStartTick;
+    const resolveAt = WINDUP_TICKS + BLOCK_GRACE_TICKS;
 
     if (p.punchPhase === PunchPhase.WINDUP && elapsed >= WINDUP_TICKS) {
       p.punchPhase = PunchPhase.ACTIVE;
+    } else if (
+      p.punchPhase === PunchPhase.ACTIVE &&
+      elapsed >= resolveAt &&
+      !p.punchResolved
+    ) {
+      p.punchResolved = true;
       this.resolveHit(p, all);
     } else if (
       p.punchPhase === PunchPhase.ACTIVE &&
-      elapsed >= WINDUP_TICKS + ACTIVE_TICKS
+      elapsed >= resolveAt + ACTIVE_TICKS
     ) {
       p.punchPhase = PunchPhase.RECOVERY;
     } else if (
       p.punchPhase === PunchPhase.RECOVERY &&
-      elapsed >= WINDUP_TICKS + ACTIVE_TICKS + RECOVERY_TICKS
+      elapsed >= resolveAt + ACTIVE_TICKS + RECOVERY_TICKS
     ) {
       p.punchPhase = PunchPhase.NONE;
       p.punchRegion = Region.NONE;
